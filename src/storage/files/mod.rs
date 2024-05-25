@@ -1,9 +1,9 @@
 use std::{collections::HashMap, io::Write};
-use crate::database::{abstraction::{Column, Table}, ddl::DDL};
 
 // Storage for files database
 
 // Texte file storage
+#[derive(Clone)]
 pub struct FileStorage {
     root_dir: String,
 }
@@ -99,7 +99,7 @@ impl FileStorage {
 
     // List all files in the root directory
     pub fn list_files(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        return self.list_files_with_extension(FileExtension::Both);
+        self.list_files_with_extension(FileExtension::Both)
     }
 
     pub fn list_files_with_extension(&self, extension: FileExtension) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -121,34 +121,18 @@ impl FileStorage {
         }
         Ok(files)
     }
-}
 
-impl DDL for FileStorage {
-    fn create_database(&self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
-        self.create_dir(name)?;
-        Ok(())
-    }
-
-    fn drop_database(&self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
-        self.delete_dir(name)?;
-        Ok(())
-    }
-    
-    fn create_table(&self, table: Table) -> Result<(), Box<dyn std::error::Error>> {
-        // Create a file for table data and descriptor
-        self.create_file(&(table.get_name().to_string()+TABLE_FILE_DATA_EXTENSION))?;
-        self.create_file(&(table.get_name().to_string()+TABLE_FILE_DESCRIPTOR_EXTENSION))?;
-        Ok(())
-    }
-
-    fn drop_table(&self, table: Table) -> Result<(), Box<dyn std::error::Error>> {
-        // Delete a file for table data and descriptor
-        self.delete_file(&(table.get_name().to_string()+TABLE_FILE_DATA_EXTENSION))?;
-        self.delete_file(&(table.get_name().to_string()+TABLE_FILE_DESCRIPTOR_EXTENSION))?;
-        Ok(())
-    }
-
-    fn alter_table(&self, _table: Table, _columns: Vec<Column>) -> Result<(), Box<dyn std::error::Error>> {
-        todo!("Not implemented yet")
+    //List all directories in the root directory
+    pub fn list_dirs(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        // List directories in the root directory
+        let mut dirs = Vec::new();
+        for entry in std::fs::read_dir(&self.root_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(entry.file_name().into_string().unwrap());
+            }
+        }
+        Ok(dirs)
     }
 }
