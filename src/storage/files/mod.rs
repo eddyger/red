@@ -1,3 +1,5 @@
+// files is a module that contains the file storage logic for the storage module.
+
 use std::{collections::HashMap, io::Write};
 
 // Storage for files database

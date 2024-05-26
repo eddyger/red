@@ -6,8 +6,9 @@ use core::str;
 use std::error::Error;
 
 use crate::storage::files::{FileExtension, FileStorage, TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION};
+use serde_derive::{Deserialize, Serialize};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Table {
     name: String,
     columns: Vec<Column>,
@@ -62,7 +63,7 @@ impl Table {
 }
 
 // column
-#[derive(Clone)]
+#[derive(Clone,Serialize, Deserialize)]
 pub struct Column {
     name: String,
     data_type: DataType,
@@ -94,18 +95,31 @@ impl Column {
 }
 
 // data type
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone,Serialize, Deserialize)]
 pub enum DataType {
-    Text,
+    Text(u16),
     Integer,
     Real,
     Blob,
 }
 
+pub trait DatabaseTrait : DDL{
+    fn load_tables(&self) -> Result<Vec<Table>, Box<dyn std::error::Error>>;
+}
+
+
 pub struct RootDatabase {
     root_dir: String,
     inner_database: Database,
     databases: Vec<Database>,
+}
+
+impl DatabaseTrait for RootDatabase{
+    // load system tables
+    fn load_tables(&self) -> Result<Vec<Table>, Box<dyn std::error::Error>> {
+        // Load tables from the database directory
+        self.inner_database.load_tables()
+    }
 }
 
 impl RootDatabase {
@@ -122,9 +136,12 @@ impl RootDatabase {
     }
 
     pub fn load_databases(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Load databases from the root directory
+        // (Re)Load databases from the root directory
         let databases = self.inner_database.get_storage().list_dirs()?;
         for database in databases {
+            if self.databases.iter().any(|db| db.get_name() == database) {
+                continue;
+            }
             self.databases.push(Database::new(&database, FileStorage::new(&format!("{}/{}", self.root_dir, database))));
         }
         Ok(())
@@ -154,6 +171,7 @@ impl DDL for RootDatabase {
         Ok(())
     }
     
+    // create system table
     fn create_table(&mut self, table: Table) -> Result<(), Box<dyn std::error::Error>> {
         // Create a file for table data and descriptor
         self.inner_database.get_storage().create_file(&(table.get_name().to_string()+TABLE_FILE_DATA_EXTENSION))?;
@@ -161,6 +179,7 @@ impl DDL for RootDatabase {
         Ok(())
     }
 
+    // drop system table
     fn drop_table(&mut self, table: Table) -> Result<(), Box<dyn std::error::Error>> {
         // Delete a file for table data and descriptor
         self.inner_database.get_storage().delete_file(&(table.get_name().to_string()+TABLE_FILE_DATA_EXTENSION))?;
@@ -168,6 +187,7 @@ impl DDL for RootDatabase {
         Ok(())
     }
 
+    // alter system table
     fn alter_table(&mut self, _table: Table, _columns: Vec<Column>) -> Result<(), Box<dyn std::error::Error>> {
         todo!("Not implemented yet")
     }
@@ -187,6 +207,22 @@ pub struct Database {
     storage: FileStorage,
 }
 
+impl DatabaseTrait for Database{
+    fn load_tables(&self) -> Result<Vec<Table>, Box<dyn std::error::Error>> {
+        // Load tables from the database directory
+        let tables = self.storage.list_files_with_extension(FileExtension::Both)?;
+        let mut result = Vec::new();
+        let extension = ".".to_string() + TABLE_FILE_DESCRIPTOR_EXTENSION;
+        for table in tables {
+            if table.ends_with(extension.as_str()) {
+                let table_name = table.trim_end_matches(extension.as_str());
+                result.push(Table::new(table_name));
+            }
+        }
+        Ok(result)
+    }
+}  
+
 impl Database {
     pub fn new(name: &str, storage: FileStorage) -> Database {
         Database {
@@ -201,20 +237,6 @@ impl Database {
 
     pub fn get_storage(&self) -> &FileStorage {
         &self.storage
-    }
-
-    pub fn load_tables(&self) -> Result<Vec<Table>, Box<dyn std::error::Error>> {
-        // Load tables from the database directory
-        let tables = self.storage.list_files_with_extension(FileExtension::Both)?;
-        let mut result = Vec::new();
-        let extension = ".".to_string() + TABLE_FILE_DESCRIPTOR_EXTENSION;
-        for table in tables {
-            if table.ends_with(extension.as_str()) {
-                let table_name = table.trim_end_matches(extension.as_str());
-                result.push(Table::new(table_name));
-            }
-        }
-        Ok(result)
     }
 
 }

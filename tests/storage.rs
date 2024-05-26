@@ -1,12 +1,7 @@
-use red::{database::abstraction::{RootDatabase, Table, DDL}, storage::{self, files::{FileExtension,TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION}}};
+mod common;
+use red::storage::{self, files::{FileExtension,TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION}};
 
-const ROOT_DIR: &str = "tests/workdir";
-
-fn setup() {
-    if std::fs::metadata(ROOT_DIR).is_err() {
-        let _ = std::fs::create_dir(ROOT_DIR);
-    }
-}
+use crate::common::{setup, ROOT_DIR};
 
 #[test]
 fn test_create_dir() {
@@ -274,35 +269,4 @@ fn test_list_files_with_extension() {
     assert!(files.contains(&data_file_name.to_owned()));
     assert!(files.contains(&descriptor_file_name.to_owned()));
 
-}
-
-#[test]
-fn test_create_table() {
-    setup();
-    let db_name = "customer";
-    if std::fs::metadata(format!("{}/{}", ROOT_DIR, db_name)).is_ok() {
-        std::fs::remove_dir_all(format!("{}/{}", ROOT_DIR, db_name)).unwrap();
-    }
-
-    let mut db_root = RootDatabase::new(ROOT_DIR);
-    let create_database = db_root.create_database(&db_name);
-    assert!(create_database.is_ok());
-    assert!(std::fs::metadata(format!("{}/{}", ROOT_DIR, db_name)).is_ok());
-
-    let mut database = create_database.unwrap();
-
-    let table = Table::new("users");
-    let result = database.create_table(table.clone());
-    assert!(result.is_ok());
-
-    let tables = database.load_tables();
-    assert!(tables.is_ok());
-    let tables = tables.unwrap();
-    assert_eq!(tables.len(), 1);
-    assert_eq!(tables[0].get_name(), "users");
-
-    let files = database.get_storage().list_files();
-    let files = files.unwrap();
-    assert!(files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DATA_EXTENSION))).to_owned());
-    assert!(files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DESCRIPTOR_EXTENSION))).to_owned());
 }
