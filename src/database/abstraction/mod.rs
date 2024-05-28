@@ -3,20 +3,29 @@
 // table
 
 use core::str;
-use std::error::Error;
+use std::{error::Error, rc::Rc};
 
 use crate::storage::files::{FileExtension, FileStorage, TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION};
 use serde_derive::{Deserialize, Serialize};
 
+pub trait DML {
+    fn insert(&mut self, record: Record) -> Result<u32, Box<dyn Error>>;
+    fn select(&self, query: Query ) -> Result<ResultSet, Box<dyn Error>>;
+    fn update(&mut self, record: Record, query: Query) -> Result<u32, Box<dyn Error>>;
+    fn delete(&mut self, query: Query) -> Result<u32, Box<dyn Error>>;
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Table {
+    database: Box<Database>,
     name: String,
     columns: Vec<Column>,
 }
 
 impl Table {
-    pub fn new(name: &str) -> Table {
+    pub fn new(name: &str, database: Box<Database>) -> Table {
         Table {
+            database,
             name: name.to_string(),
             columns: Vec::new(),
         }
@@ -60,6 +69,8 @@ impl Table {
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
     }
+
+
 }
 
 // column
@@ -67,14 +78,23 @@ impl Table {
 pub struct Column {
     name: String,
     data_type: DataType,
+    is_primary_key: bool,
+    is_nullable: bool,
 }
 
 impl Column {
-    pub fn new(name: &str, data_type: DataType) -> Column {
-        Column {
-            name: name.to_string(),
-            data_type,
+    pub fn new(name: &str, data_type: DataType, is_primary_key: bool, is_nullable: bool) -> Result<Column,String> {
+        if is_primary_key && is_nullable {
+            return Err("Primary key column cannot be nullable".to_string());
         }
+        Ok(
+            Column {
+                name: name.to_string(),
+                data_type,
+                is_primary_key,
+                is_nullable,
+            }
+        )
     }
 
     pub fn get_name(&self) -> &str {
@@ -92,6 +112,22 @@ impl Column {
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
     }
+
+    pub fn is_primary_key(&self) -> bool {
+        self.is_primary_key
+    }
+
+    pub fn is_nullable(&self) -> bool {
+        self.is_nullable
+    }
+
+    pub fn set_primary_key(&mut self, is_primary_key: bool) {
+        self.is_primary_key = is_primary_key;
+    }
+
+    pub fn set_nullable(&mut self, is_nullable: bool) {
+        self.is_nullable = is_nullable;
+    }
 }
 
 // data type
@@ -101,6 +137,79 @@ pub enum DataType {
     Integer,
     Real,
     Blob,
+}
+
+pub struct Record {
+    table: Table,
+    values: Vec<(Column,String)>,
+}
+
+impl Record {
+    pub fn new(table: Table, values: Vec<(Column,String)>) -> Record {
+        Record {
+            table,
+            values,
+        }
+    }
+
+    pub fn get_table(&self) -> &Table {
+        &self.table
+    }
+
+    pub fn set_table(&mut self, table: Table) {
+        self.table = table;
+    }
+
+    pub fn get_values(&self) -> &Vec<(Column,String)> {
+        &self.values
+    }
+
+    pub fn set_values(&mut self, values: Vec<(Column,String)>) {
+        self.values = values;
+    }
+
+}
+
+pub struct ResultSet {
+   records: Vec<Record>
+}
+
+impl ResultSet {
+    pub fn new(records: Vec<Record>) -> ResultSet {
+        ResultSet {
+            records,
+        }
+    }
+
+    pub fn default() -> ResultSet {
+        ResultSet {
+            records: Vec::new(),
+        }
+    }
+
+    pub fn add_record(&mut self, record: Record) {
+        self.records.push(record);
+    }
+
+    pub fn get_records(&self) -> &Vec<Record> {
+        &self.records
+    }
+
+    pub fn set_records(&mut self, records: Vec<Record>) {
+        self.records = records;
+    }
+}
+
+pub struct Query {
+    sql: String,
+}
+
+pub trait DDL {
+    fn create_database(&mut self, name: &str) -> Result<Database, Box<dyn Error>>;
+    fn drop_database(&mut self, name: &str) -> Result<(), Box<dyn Error>>;
+    fn create_table(&mut self, table: Table) -> Result<(), Box<dyn Error>>;
+    fn drop_table(&mut self, table: Table) -> Result<(), Box<dyn Error>>;
+    fn alter_table(&mut self, table: Table, columns: Vec<Column>) -> Result<(), Box<dyn Error>>;
 }
 
 pub trait DatabaseTrait : DDL{
@@ -193,15 +302,7 @@ impl DDL for RootDatabase {
     }
 }
 
-pub trait DDL {
-    fn create_database(&mut self, name: &str) -> Result<Database, Box<dyn Error>>;
-    fn drop_database(&mut self, name: &str) -> Result<(), Box<dyn Error>>;
-    fn create_table(&mut self, table: Table) -> Result<(), Box<dyn Error>>;
-    fn drop_table(&mut self, table: Table) -> Result<(), Box<dyn Error>>;
-    fn alter_table(&mut self, table: Table, columns: Vec<Column>) -> Result<(), Box<dyn Error>>;
-}
-
-#[derive(Clone)]
+#[derive(Clone,Deserialize, Serialize)]
 pub struct Database {
     name: String,
     storage: FileStorage,
@@ -216,7 +317,7 @@ impl DatabaseTrait for Database{
         for table in tables {
             if table.ends_with(extension.as_str()) {
                 let table_name = table.trim_end_matches(extension.as_str());
-                result.push(Table::new(table_name));
+                result.push(Table::new(table_name,Box::new(self.clone())));
             }
         }
         Ok(result)

@@ -2,10 +2,12 @@
 
 use std::{collections::HashMap, io::Write};
 
+use serde_derive::{Deserialize, Serialize};
+
 // Storage for files database
 
 // Texte file storage
-#[derive(Clone)]
+#[derive(Clone,Serialize,Deserialize)]
 pub struct FileStorage {
     root_dir: String,
 }

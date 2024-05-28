@@ -1,23 +1,28 @@
 mod common;
 
-use red::database::abstraction::{Column, DataType, DatabaseTrait, Table, DDL};
+use red::database::abstraction::{Column, DataType, Database, DatabaseTrait, Table, DDL};
 use red::database::abstraction::RootDatabase;
-use red::storage::files::{TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION};
+use red::storage::files::{FileStorage, TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION};
 
 use crate::common::{setup, ROOT_DIR};
 
 #[test]
 fn test_database_abstraction_column_table() {
-    let mut table = Table::new("users");
+    let database = Database::new("customer", FileStorage::new(ROOT_DIR));
+    let mut table = Table::new("users", Box::new(database));
     assert_eq!(table.get_name(), "users");
     assert_eq!(table.get_columns().len(), 0);
 
-    let column = Column::new("id", DataType::Integer);
+    let column_creation = Column::new("id", DataType::Integer, true, false);
+    assert!(column_creation.is_ok());
+    let column = column_creation.unwrap();
     table.add_column(column);
     assert_eq!(table.get_columns().len(), 1);
     assert_eq!(table.get_column_index("id").unwrap(), 0);
     
-    let column = Column::new("name", DataType::Text(255));
+    let column_creation = Column::new("name", DataType::Text(255), false, false);
+    assert!(column_creation.is_ok());
+    let column = column_creation.unwrap();
     table.add_column(column);
     assert_eq!(table.get_columns().len(), 2);
     assert_eq!(table.get_column_index("name").unwrap(), 1);
@@ -43,7 +48,9 @@ fn test_database_abstraction_column_table() {
 
 #[test]
 fn test_database_abstraction_column() {
-    let mut column = Column::new("id", DataType::Integer);
+    let column_creation = Column::new("id", DataType::Integer, true, false);
+    assert!(column_creation.is_ok());
+    let mut column = column_creation.unwrap();
     assert_eq!(column.get_name(), "id");
     assert_eq!(*column.get_data_type(), DataType::Integer);
 
@@ -75,7 +82,7 @@ fn test_create_table() {
 
     let mut database = create_database.unwrap();
 
-    let table = Table::new("users");
+    let table = Table::new("users", Box::new(database.clone()));
     let result = database.create_table(table.clone());
     assert!(result.is_ok());
 
@@ -106,7 +113,7 @@ fn test_drop_table() {
 
     let mut database = create_database.unwrap();
 
-    let table = Table::new("users");
+    let table = Table::new("users", Box::new(database.clone()));
     let result = database.create_table(table.clone());
     assert!(result.is_ok());
 
