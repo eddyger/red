@@ -70,6 +70,10 @@ impl Table {
         self.name = name.to_string();
     }
 
+    pub fn get_database(&self) -> &Database {
+        &self.database
+    }
+
 
 }
 

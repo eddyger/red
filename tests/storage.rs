@@ -1,5 +1,5 @@
 mod common;
-use red::storage::{self, files::{FileExtension,TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION}};
+use red::{database::abstraction::{Column, DataType, Database, Table}, storage::{self, files::{FileExtension,TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION}, persistence::DataHandler}};
 
 use crate::common::{setup, ROOT_DIR};
 
@@ -268,5 +268,32 @@ fn test_list_files_with_extension() {
     let files = files.unwrap();
     assert!(files.contains(&data_file_name.to_owned()));
     assert!(files.contains(&descriptor_file_name.to_owned()));
+
+}
+
+#[test]
+fn test_save_file_descriptor() {
+    setup();
+
+    let dir_name = "test_save_file_descriptor";
+    let database_full_path = format!("{}/{}", ROOT_DIR, dir_name);
+    if std::fs::metadata(&database_full_path).is_ok() {
+        std::fs::remove_dir_all(&database_full_path).unwrap();
+    }
+    let storage = storage::files::FileStorage::new(ROOT_DIR);
+    
+    let result = storage.create_dir(&dir_name);
+    
+    let data_handler = DataHandler::new(database_full_path);
+    let mut table = Table::new("users", Box::new(Database::new("db", storage)));
+    // table has no columns
+    let persist_result = data_handler.persist_table_descriptor(&table);
+    assert!(persist_result.is_err());
+
+    // table has columns
+    let column = Column::new("id", DataType::Integer, true, false);
+    table.add_column(column.unwrap());  
+    let persist_result = data_handler.persist_table_descriptor(&table);
+    assert!(persist_result.is_ok());
 
 }
