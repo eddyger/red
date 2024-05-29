@@ -213,35 +213,53 @@ pub trait DDL {
 }
 
 pub trait DatabaseTrait : DDL{
-    fn load_tables(&self) -> Result<Vec<Table>, Box<dyn std::error::Error>>;
+    fn load_tables(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+    fn get_name(&self) -> &str;
+    fn get_storage(&self) -> &FileStorage;
+    fn get_root_dir(&self) -> &str;
+    fn get_tables(&self) -> &Vec<Table>;
 }
 
 
 pub struct RootDatabase {
-    root_dir: String,
     inner_database: Database,
     databases: Vec<Database>,
 }
 
 impl DatabaseTrait for RootDatabase{
     // load system tables
-    fn load_tables(&self) -> Result<Vec<Table>, Box<dyn std::error::Error>> {
+    fn load_tables(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Load tables from the database directory
         self.inner_database.load_tables()
+    }
+    
+    fn get_name(&self) -> &str {
+        self.inner_database.get_name()
+    }
+    
+    fn get_storage(&self) -> &FileStorage {
+        self.inner_database.get_storage()
+    }
+    
+    fn get_root_dir(&self) -> &str {
+        &self.inner_database.get_storage().get_root_dir()
+    }
+    
+    fn get_tables(&self) -> &Vec<Table> {
+        &self.inner_database.get_tables()
     }
 }
 
 impl RootDatabase {
     pub fn new(root_dir: &str) -> RootDatabase {
         RootDatabase {
-            root_dir: root_dir.to_string(),
             inner_database: Database::new("root_database", FileStorage::new(root_dir)),
             databases: Vec::new(),
         }
     }
 
     pub fn get_root_dir(&self) -> &str {
-        &self.root_dir
+        &self.inner_database.get_storage().get_root_dir()
     }
 
     pub fn load_databases(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -251,7 +269,7 @@ impl RootDatabase {
             if self.databases.iter().any(|db| db.get_name() == database) {
                 continue;
             }
-            self.databases.push(Database::new(&database, FileStorage::new(&format!("{}/{}", self.root_dir, database))));
+            self.databases.push(Database::new(&database, FileStorage::new(&format!("{}/{}", self.inner_database.get_storage().get_root_dir(), database))));
         }
         Ok(())
     }
@@ -269,7 +287,7 @@ impl RootDatabase {
 impl DDL for RootDatabase {
     fn create_database(&mut self, name: &str) -> Result<Database, Box<dyn std::error::Error>> {
         self.inner_database.get_storage().create_dir(name)?;
-        let new_database = Database::new(name, FileStorage::new(&format!("{}/{}", self.root_dir, name)));
+        let new_database = Database::new(name, FileStorage::new(&format!("{}/{}", self.inner_database.get_root_dir(), name)));
         self.databases.push(new_database.clone());
         Ok(new_database)
     }
@@ -306,21 +324,40 @@ impl DDL for RootDatabase {
 pub struct Database {
     name: String,
     storage: FileStorage,
+    tables: Vec<Table>,
 }
 
 impl DatabaseTrait for Database{
-    fn load_tables(&self) -> Result<Vec<Table>, Box<dyn std::error::Error>> {
+    fn load_tables(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Clear tables if not first call
+        self.tables.clear();
+
         // Load tables from the database directory
         let tables = self.storage.list_files_with_extension(FileExtension::Both)?;
-        let mut result = Vec::new();
         let extension = ".".to_string() + TABLE_FILE_DESCRIPTOR_EXTENSION;
         for table in tables {
             if table.ends_with(extension.as_str()) {
                 let table_name = table.trim_end_matches(extension.as_str());
-                result.push(Table::new(table_name,Box::new(self.clone())));
+                self.tables.push(Table::new(table_name,Box::new(self.clone())));
             }
         }
-        Ok(result)
+        Ok(())
+    }
+    
+    fn get_name(&self) -> &str {
+        &self.name
+    }
+    
+    fn get_storage(&self) -> &FileStorage {
+        &self.storage
+    }
+    
+    fn get_root_dir(&self) -> &str {
+        &self.storage.get_root_dir()
+    }
+    
+    fn get_tables(&self) -> &Vec<Table> {
+        &self.tables
     }
 }  
 
@@ -329,6 +366,7 @@ impl Database {
         Database {
             name: name.to_string(),
             storage,
+            tables: Vec::new(),
         }
     }
 

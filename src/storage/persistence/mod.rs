@@ -49,13 +49,13 @@ impl FileTableData {
     }
 }
 
-pub struct DataPersister{
+pub struct DataHandler{
     storage: FileStorage
 }
 
-impl DataPersister {
-    pub fn new(database_path: String) -> DataPersister {
-        DataPersister{
+impl DataHandler {
+    pub fn new(database_path: String) -> DataHandler {
+        DataHandler{
             storage: FileStorage::new(&database_path)
         }
     }
@@ -70,7 +70,7 @@ impl DataPersister {
     }
 }
 
-impl DML for DataPersister {
+impl DML for DataHandler {
     fn insert(&mut self, record: crate::database::abstraction::Record) -> Result<u32, Box<dyn std::error::Error>> {
         // check if record column count matches table column count
         let record_columns = record.get_values();

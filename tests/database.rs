@@ -86,11 +86,10 @@ fn test_create_table() {
     let result = database.create_table(table.clone());
     assert!(result.is_ok());
 
-    let tables = database.load_tables();
-    assert!(tables.is_ok());
-    let tables = tables.unwrap();
-    assert_eq!(tables.len(), 1);
-    assert_eq!(tables[0].get_name(), "users");
+    let load_result = database.load_tables();
+    assert!(load_result.is_ok());
+    assert_eq!(database.get_tables().len(), 1);
+    assert_eq!(database.get_tables()[0].get_name(), "users");
 
     let files = database.get_storage().list_files();
     let files = files.unwrap();
@@ -117,11 +116,10 @@ fn test_drop_table() {
     let result = database.create_table(table.clone());
     assert!(result.is_ok());
 
-    let tables = database.load_tables();
-    assert!(tables.is_ok());
-    let tables = tables.unwrap();
-    assert_eq!(tables.len(), 1);
-    assert_eq!(tables[0].get_name(), "users");
+    let load_result = database.load_tables();
+    assert!(load_result.is_ok());
+    assert_eq!(database.get_tables().len(), 1);
+    assert_eq!(database.get_tables()[0].get_name(), "users");
 
     let files = database.get_storage().list_files();
     let files = files.unwrap();
@@ -131,10 +129,9 @@ fn test_drop_table() {
     let result = database.drop_table(table.clone());
     assert!(result.is_ok());
 
-    let tables = database.load_tables();
-    assert!(tables.is_ok());
-    let tables = tables.unwrap();
-    assert!(tables.is_empty());
+    let load_result = database.load_tables();
+    assert!(load_result.is_ok());
+    assert!(database.get_tables().is_empty());
 
     let files = database.get_storage().list_files();
     let files = files.unwrap();
