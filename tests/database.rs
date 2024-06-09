@@ -1,8 +1,9 @@
 mod common;
 
-use red::database::abstraction::{Column, DataType, Database, DatabaseTrait, Table, DDL};
+use red::database::abstraction::{Column, DataType, Database, DatabaseTrait, Record, Table, DDL, DML};
 use red::database::abstraction::RootDatabase;
 use red::storage::files::{FileStorage, TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION};
+use red::storage::persistence::DataHandler;
 
 use crate::common::{setup, ROOT_DIR};
 
@@ -75,23 +76,34 @@ fn test_create_table() {
         std::fs::remove_dir_all(format!("{}/{}", ROOT_DIR, db_name)).unwrap();
     }
 
-    let mut db_root = RootDatabase::new(ROOT_DIR);
-    let create_database = db_root.create_database(&db_name);
+    let mut root_database = RootDatabase::new(ROOT_DIR);
+    let create_database = root_database.create_database(&db_name);
     assert!(create_database.is_ok());
     assert!(std::fs::metadata(format!("{}/{}", ROOT_DIR, db_name)).is_ok());
 
-    let mut database = create_database.unwrap();
+    let mut user_database = create_database.unwrap();
 
-    let table = Table::new("users", Box::new(database.clone()));
-    let result = database.create_table(table.clone());
+    // table creation with no columns
+    let mut table = Table::new("users", Box::new(user_database.clone()));
+    let result = user_database.create_table(table.clone());
+    assert!(result.is_err());
+
+    // table creation with columns
+    let column_creation = Column::new("id", DataType::Integer, true, false);
+    assert!(column_creation.is_ok());
+    table.add_column(column_creation.unwrap());
+    let column_creation = Column::new("name", DataType::Text(255), false, false);
+    assert!(column_creation.is_ok());
+    table.add_column(column_creation.unwrap());
+    let result = user_database.create_table(table.clone());
     assert!(result.is_ok());
 
-    let load_result = database.load_tables();
+    let load_result = user_database.load_tables();
     assert!(load_result.is_ok());
-    assert_eq!(database.get_tables().len(), 1);
-    assert_eq!(database.get_tables()[0].get_name(), "users");
+    assert_eq!(user_database.get_tables().len(), 1);
+    assert_eq!(user_database.get_tables()[0].get_name(), "users");
 
-    let files = database.get_storage().list_files();
+    let files = user_database.get_storage().list_files();
     let files = files.unwrap();
     assert!(files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DATA_EXTENSION))).to_owned());
     assert!(files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DESCRIPTOR_EXTENSION))).to_owned());
@@ -110,30 +122,39 @@ fn test_drop_table() {
     assert!(create_database.is_ok());
     assert!(std::fs::metadata(format!("{}/{}", ROOT_DIR, db_name)).is_ok());
 
-    let mut database = create_database.unwrap();
+    let mut user_database = create_database.unwrap();
 
-    let table = Table::new("users", Box::new(database.clone()));
-    let result = database.create_table(table.clone());
+    let mut table = Table::new("users", Box::new(user_database.clone()));
+    let column_creation = Column::new("id", DataType::Integer, true, false);
+    assert!(column_creation.is_ok());
+    table.add_column(column_creation.unwrap());
+    let column_creation = Column::new("name", DataType::Text(255), false, false);
+    assert!(column_creation.is_ok());
+    table.add_column(column_creation.unwrap());
+    let result = user_database.create_table(table.clone());
     assert!(result.is_ok());
 
-    let load_result = database.load_tables();
-    assert!(load_result.is_ok());
-    assert_eq!(database.get_tables().len(), 1);
-    assert_eq!(database.get_tables()[0].get_name(), "users");
+    let result = user_database.create_table(table.clone());
+    assert!(result.is_ok());
 
-    let files = database.get_storage().list_files();
+    let load_result = user_database.load_tables();
+    assert!(load_result.is_ok());
+    assert_eq!(user_database.get_tables().len(), 1);
+    assert_eq!(user_database.get_tables()[0].get_name(), "users");
+
+    let files = user_database.get_storage().list_files();
     let files = files.unwrap();
     assert!(files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DATA_EXTENSION))).to_owned());
     assert!(files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DESCRIPTOR_EXTENSION))).to_owned());
 
-    let result = database.drop_table(table.clone());
+    let result = user_database.drop_table(table.clone());
     assert!(result.is_ok());
 
-    let load_result = database.load_tables();
+    let load_result = user_database.load_tables();
     assert!(load_result.is_ok());
-    assert!(database.get_tables().is_empty());
+    assert!(user_database.get_tables().is_empty());
 
-    let files = database.get_storage().list_files();
+    let files = user_database.get_storage().list_files();
     let files = files.unwrap();
     assert!(!files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DATA_EXTENSION))).to_owned());
     assert!(!files.contains(&((table.get_name().to_owned() + "." + TABLE_FILE_DESCRIPTOR_EXTENSION))).to_owned());
@@ -191,4 +212,50 @@ fn test_load_databases() {
     let databases = db_root.get_databases();
     assert_eq!(databases.len(), 1);
     assert_eq!(databases[0].get_name(), db_name);
+}
+
+#[test]
+fn test_insert_table_data() {
+    setup();
+    let root_path = "db_root_02";
+    if std::fs::metadata(format!("{}/{}", ROOT_DIR, root_path)).is_ok() {
+        std::fs::remove_dir_all(format!("{}/{}", ROOT_DIR, root_path)).unwrap();
+    }
+    std::fs::create_dir(format!("{}/{}", ROOT_DIR, root_path)).unwrap();
+
+    let mut db_root = RootDatabase::new(&format!("{}/{}", ROOT_DIR, root_path));
+    let db_name = "customer_01";
+    let create_database = db_root.create_database(&db_name);
+    assert!(create_database.is_ok());
+    assert!(std::fs::metadata(format!("{}/{}", ROOT_DIR, db_name)).is_ok());
+
+    let mut database = create_database.unwrap();
+    let mut new_table = Table::new("users", Box::new(database.clone()));
+    let column_creation = Column::new("id", DataType::Integer, true, false);
+    assert!(column_creation.is_ok());
+    let column = column_creation.unwrap();
+    new_table.add_column(column);
+    let column_creation = Column::new("name", DataType::Text(255), false, false);
+    assert!(column_creation.is_ok());
+    let column = column_creation.unwrap();
+    new_table.add_column(column);
+
+    let result = database.create_table(new_table.clone());
+    let mut data_handler = DataHandler::new_from_path(format!("{}/{}/{}", ROOT_DIR, root_path, db_name));
+    let columns_value = vec![
+        (
+            Column::new("id", DataType::Integer, true, false).unwrap(),
+            Some("7".to_string())
+        ), 
+        (
+            Column::new("name", DataType::Text(255), false, false).unwrap(), 
+            Some("John Doe".to_string())
+        )
+    ];
+    let new_record = Record::new(new_table.clone(), columns_value);
+    let result = data_handler.insert(new_record);
+    dbg!(&result);
+    assert!(result.is_ok());
+    assert!(result.unwrap() == 1);
+    
 }

@@ -127,9 +127,10 @@ fn test_write_file_exists() {
     let result = storage.write_file(&file_name, content);
     assert!(result.is_ok());
 
+    // write again over the same file
     let content = "Hello, World! 2";
     let result = storage.write_file(&file_name, content);
-    assert!(result.is_err());
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -284,7 +285,7 @@ fn test_save_file_descriptor() {
     
     let result = storage.create_dir(&dir_name);
     
-    let data_handler = DataHandler::new(database_full_path);
+    let data_handler = DataHandler::new_from_path(database_full_path);
     let mut table = Table::new("users", Box::new(Database::new("db", storage)));
     // table has no columns
     let persist_result = data_handler.persist_table_descriptor(&table);

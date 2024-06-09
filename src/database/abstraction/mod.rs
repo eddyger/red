@@ -3,9 +3,9 @@
 // table
 
 use core::str;
-use std::{error::Error, rc::Rc};
+use std::error::Error;
 
-use crate::storage::files::{FileExtension, FileStorage, TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION};
+use crate::storage::{files::{FileExtension, FileStorage, TABLE_FILE_DATA_EXTENSION, TABLE_FILE_DESCRIPTOR_EXTENSION}, persistence::DataHandler};
 use serde_derive::{Deserialize, Serialize};
 
 pub trait DML {
@@ -15,11 +15,21 @@ pub trait DML {
     fn delete(&mut self, query: Query) -> Result<u32, Box<dyn Error>>;
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize,Debug)]
 pub struct Table {
     database: Box<Database>,
     name: String,
     columns: Vec<Column>,
+}
+
+impl Default for Table {
+    fn default() -> Self {
+        Table {
+            database: Box::new(Database::new("default", FileStorage::new("default"))),
+            name: "default".to_string(),
+            columns: Vec::new(),
+        }
+    }
 }
 
 impl Table {
@@ -74,11 +84,15 @@ impl Table {
         &self.database
     }
 
+    pub fn set_database(&mut self, database: Database) {
+        self.database = Box::new(database);
+    }
+
 
 }
 
 // column
-#[derive(Clone,Serialize, Deserialize)]
+#[derive(Clone,Serialize, Deserialize,Debug)]
 pub struct Column {
     name: String,
     data_type: DataType,
@@ -134,6 +148,12 @@ impl Column {
     }
 }
 
+impl PartialEq for Column {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.data_type == other.data_type && self.is_primary_key == other.is_primary_key && self.is_nullable == other.is_nullable
+    }
+}
+
 // data type
 #[derive(Debug, PartialEq, Clone,Serialize, Deserialize)]
 pub enum DataType {
@@ -143,13 +163,32 @@ pub enum DataType {
     Blob,
 }
 
+#[derive(Debug, Clone,Serialize, Deserialize)]
 pub struct Record {
+    #[serde(skip)]
     table: Table,
-    values: Vec<(Column,String)>,
+    values: Vec<(Column,Option<String>)>,
+}
+
+impl PartialEq for Record {
+    fn eq(&self, other: &Self) -> bool {
+        if self.table.get_name() != other.table.get_name() {
+            return false;
+        }
+        for (i, (column, value)) in self.values.iter().enumerate() {
+            if column != &other.values[i].0 {
+                return false;
+            }
+            if value != &other.values[i].1 {
+                return false;
+            }
+        }
+        return true;
+    }
 }
 
 impl Record {
-    pub fn new(table: Table, values: Vec<(Column,String)>) -> Record {
+    pub fn new(table: Table, values: Vec<(Column,Option<String>)>) -> Record {
         Record {
             table,
             values,
@@ -164,11 +203,11 @@ impl Record {
         self.table = table;
     }
 
-    pub fn get_values(&self) -> &Vec<(Column,String)> {
+    pub fn get_values(&self) -> &Vec<(Column,Option<String>)> {
         &self.values
     }
 
-    pub fn set_values(&mut self, values: Vec<(Column,String)>) {
+    pub fn set_values(&mut self, values: Vec<(Column,Option<String>)>) {
         self.values = values;
     }
 
@@ -290,8 +329,7 @@ impl RootDatabase {
 
 impl DDL for RootDatabase {
     fn create_database(&mut self, name: &str) -> Result<Database, Box<dyn std::error::Error>> {
-        self.inner_database.get_storage().create_dir(name)?;
-        let new_database = Database::new(name, FileStorage::new(&format!("{}/{}", self.inner_database.get_root_dir(), name)));
+        let new_database = self.inner_database.create_database(name)?;
         self.databases.push(new_database.clone());
         Ok(new_database)
     }
@@ -305,16 +343,14 @@ impl DDL for RootDatabase {
     // create system table
     fn create_table(&mut self, table: Table) -> Result<(), Box<dyn std::error::Error>> {
         // Create a file for table data and descriptor
-        self.inner_database.get_storage().create_file(&(table.get_name().to_string()+TABLE_FILE_DATA_EXTENSION))?;
-        self.inner_database.get_storage().create_file(&(table.get_name().to_string()+TABLE_FILE_DESCRIPTOR_EXTENSION))?;
+        self.inner_database.create_table(table)?;
         Ok(())
     }
 
     // drop system table
     fn drop_table(&mut self, table: Table) -> Result<(), Box<dyn std::error::Error>> {
         // Delete a file for table data and descriptor
-        self.inner_database.get_storage().delete_file(&(table.get_name().to_string()+TABLE_FILE_DATA_EXTENSION))?;
-        self.inner_database.get_storage().delete_file(&(table.get_name().to_string()+TABLE_FILE_DESCRIPTOR_EXTENSION))?;
+        self.inner_database.drop_table(table)?;
         Ok(())
     }
 
@@ -324,7 +360,7 @@ impl DDL for RootDatabase {
     }
 }
 
-#[derive(Clone,Deserialize, Serialize)]
+#[derive(Clone,Deserialize, Serialize,Debug)]
 pub struct Database {
     name: String,
     storage: FileStorage,
@@ -399,8 +435,9 @@ impl DDL for Database {
     
     fn create_table(&mut self, table: Table) -> Result<(), Box<dyn std::error::Error>> {
         // Create a file for table data and descriptor
-        self.storage.create_file(&(table.get_name().to_string()+"."+TABLE_FILE_DATA_EXTENSION))?;
-        self.storage.create_file(&(table.get_name().to_string()+"."+TABLE_FILE_DESCRIPTOR_EXTENSION))?;
+        let data_handler = DataHandler::new_from_storage(self.storage.clone());
+        data_handler.persist_table_descriptor(&table)?;
+        data_handler.persist_new_table(&table)?;
         Ok(())
     }
 
@@ -411,7 +448,7 @@ impl DDL for Database {
         Ok(())
     }
 
-    fn alter_table(&mut self, _table: Table, _columns: Vec<Column>) -> Result<(), Box<dyn std::error::Error>> {
+    fn alter_table(&mut self, table: Table, changed_columns: Vec<Column>) -> Result<(), Box<dyn std::error::Error>> {
         todo!("Not implemented yet")
     }
 }

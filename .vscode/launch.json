@@ -1,0 +1,121 @@
+{
+    // Utilisez IntelliSense pour en savoir plus sur les attributs possibles.
+    // Pointez pour afficher la description des attributs existants.
+    // Pour plus d'informations, visitez : https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'red'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=red"
+                ],
+                "filter": {
+                    "name": "red",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'red'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=red",
+                    "--package=red"
+                ],
+                "filter": {
+                    "name": "red",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'red'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=red",
+                    "--package=red"
+                ],
+                "filter": {
+                    "name": "red",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'database'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=database",
+                    "--package=red"
+                ],
+                "filter": {
+                    "name": "database",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'storage'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=storage",
+                    "--package=red"
+                ],
+                "filter": {
+                    "name": "storage",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'common'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=common",
+                    "--package=red"
+                ],
+                "filter": {
+                    "name": "common",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

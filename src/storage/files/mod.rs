@@ -7,7 +7,7 @@ use serde_derive::{Deserialize, Serialize};
 // Storage for files database
 
 // Texte file storage
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Clone,Serialize,Deserialize,Debug)]
 pub struct FileStorage {
     root_dir: String,
 }
@@ -81,11 +81,7 @@ impl FileStorage {
     }
 
     pub fn write_file(&self, file_name: &str, content: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Write a file content if file does not exist. if file exists, it will throw an error
         let path = format!("{}/{}", self.root_dir, file_name);
-        if std::fs::metadata(path.clone()).is_ok() {
-            return Err("File already exists".into());
-        }
         std::fs::write(path, content)?;
         Ok(())
     }
